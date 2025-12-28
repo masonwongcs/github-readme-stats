@@ -7,6 +7,7 @@ import { whitelist, gistWhitelist } from "./envs.js";
 const NOT_WHITELISTED_USERNAME_MESSAGE = "This username is not whitelisted";
 const NOT_WHITELISTED_GIST_MESSAGE = "This gist ID is not whitelisted";
 const BLACKLISTED_MESSAGE = "This username is blacklisted";
+const RESTRICTED_USERNAME_MESSAGE = "Access restricted to https://github.com/masonwongcs";
 
 /**
  * Guards access using whitelist/blacklist.
@@ -23,6 +24,21 @@ const guardAccess = ({ res, id, type, colors }) => {
     throw new Error(
       'Invalid type. Expected "username", "gist", or "wakatime".',
     );
+  }
+
+  // Restrict username access to only masonwongcs
+  if (type === "username" && id && id !== "masonwongcs") {
+    const result = res.send(
+      renderError({
+        message: RESTRICTED_USERNAME_MESSAGE,
+        secondaryMessage: "Please deploy your own instance",
+        renderOptions: {
+          ...colors,
+          show_repo_link: false,
+        },
+      }),
+    );
+    return { isPassed: false, result };
   }
 
   const currentWhitelist = type === "gist" ? gistWhitelist : whitelist;
