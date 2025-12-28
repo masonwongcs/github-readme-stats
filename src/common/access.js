@@ -41,6 +41,21 @@ const guardAccess = ({ res, id, type, colors }) => {
     return { isPassed: false, result };
   }
 
+  // Restrict wakatime username access to only masonwongcs
+  if (type === "wakatime" && id && id !== "masonwongcs") {
+    const result = res.send(
+      renderError({
+        message: RESTRICTED_USERNAME_MESSAGE,
+        secondaryMessage: "Please deploy your own instance",
+        renderOptions: {
+          ...colors,
+          show_repo_link: false,
+        },
+      }),
+    );
+    return { isPassed: false, result };
+  }
+
   const currentWhitelist = type === "gist" ? gistWhitelist : whitelist;
   const notWhitelistedMsg =
     type === "gist"

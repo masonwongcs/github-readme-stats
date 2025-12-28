@@ -70,6 +70,28 @@ export default async (req, res) => {
 
   try {
     const gistData = await fetchGist(id);
+    
+    // Restrict gist access to only gists owned by masonwongcs
+    // Extract owner from nameWithOwner (format: "owner/filename")
+    const owner = gistData.nameWithOwner?.split("/")[0];
+    if (owner && owner !== "masonwongcs") {
+      setErrorCacheHeaders(res);
+      return res.send(
+        renderError({
+          message: "Access restricted to https://github.com/masonwongcs",
+          secondaryMessage: "Please deploy your own instance",
+          renderOptions: {
+            title_color,
+            text_color,
+            bg_color,
+            border_color,
+            theme,
+            show_repo_link: false,
+          },
+        }),
+      );
+    }
+    
     const cacheSeconds = resolveCacheSeconds({
       requested: parseInt(cache_seconds, 10),
       def: CACHE_TTL.GIST_CARD.DEFAULT,
