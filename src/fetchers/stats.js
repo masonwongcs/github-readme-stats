@@ -49,6 +49,17 @@ const GRAPHQL_STATS_QUERY = `
       reviews: contributionsCollection {
         totalPullRequestReviewContributions
       }
+      contributionsCollection {
+        contributionCalendar {
+          totalContributions
+          weeks {
+            contributionDays {
+              date
+              contributionCount
+            }
+          }
+        }
+      }
       repositoriesContributedTo(first: 1, contributionTypes: [COMMIT, ISSUE, PULL_REQUEST, REPOSITORY]) {
         totalCount
       }
@@ -213,6 +224,105 @@ const totalCommitsFetcher = async (username) => {
 };
 
 /**
+ * Calculate current and longest contribution streaks from contribution calendar.
+ *
+ * @param {Array} weeks Array of weeks with contribution days.
+ * @returns {{currentStreak: number, longestStreak: number}} Streak data.
+ */
+const calculateStreaks = (weeks) => {
+  if (!weeks || weeks.length === 0) {
+    return { currentStreak: 0, longestStreak: 0 };
+  }
+
+  // Flatten all contribution days
+  const allDays = [];
+  for (const week of weeks) {
+    if (week.contributionDays) {
+      allDays.push(...week.contributionDays);
+    }
+  }
+
+  if (allDays.length === 0) {
+    return { currentStreak: 0, longestStreak: 0 };
+  }
+
+  // Sort days by date
+  allDays.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+  // Find days with contributions (contributionCount > 0)
+  const contributionDates = allDays
+    .filter((day) => day.contributionCount > 0)
+    .map((day) => new Date(day.date))
+    .map((date) => {
+      // Normalize to midnight UTC to avoid timezone issues
+      return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+    });
+
+  if (contributionDates.length === 0) {
+    return { currentStreak: 0, longestStreak: 0 };
+  }
+
+  // Calculate longest streak
+  let longestStreak = 1;
+  let currentLongestStreak = 1;
+
+  for (let i = 1; i < contributionDates.length; i++) {
+    const prevDate = contributionDates[i - 1];
+    const currDate = contributionDates[i];
+    const daysDiff = Math.floor((currDate.getTime() - prevDate.getTime()) / (1000 * 60 * 60 * 24));
+
+    if (daysDiff === 1) {
+      // Consecutive day
+      currentLongestStreak++;
+      longestStreak = Math.max(longestStreak, currentLongestStreak);
+    } else {
+      // Gap in contributions
+      currentLongestStreak = 1;
+    }
+  }
+
+  // Calculate current streak (from today backwards)
+  const today = new Date();
+  today.setUTCHours(0, 0, 0, 0);
+  
+  let currentStreak = 0;
+  let checkDate = new Date(today);
+  
+  // Check if today has contributions
+  const todayHasContributions = contributionDates.some(
+    (date) => date.getTime() === today.getTime()
+  );
+
+  if (todayHasContributions) {
+    currentStreak = 1;
+    checkDate = new Date(today);
+    checkDate.setUTCDate(checkDate.getUTCDate() - 1);
+  } else {
+    // Start from yesterday
+    checkDate.setUTCDate(checkDate.getUTCDate() - 1);
+  }
+
+  // Count backwards from today/yesterday
+  while (true) {
+    const hasContributions = contributionDates.some(
+      (date) => date.getTime() === checkDate.getTime()
+    );
+
+    if (hasContributions) {
+      currentStreak++;
+      checkDate.setUTCDate(checkDate.getUTCDate() - 1);
+    } else {
+      break;
+    }
+  }
+
+  return {
+    currentStreak,
+    longestStreak,
+  };
+};
+
+/**
  * Fetch stats for a given username.
  *
  * @param {string} username GitHub username.
@@ -249,6 +359,8 @@ const fetchStats = async (
     totalDiscussionsStarted: 0,
     totalDiscussionsAnswered: 0,
     contributedTo: 0,
+    currentStreak: 0,
+    longestStreak: 0,
     rank: { level: "C", percentile: 100 },
   };
 
@@ -309,6 +421,13 @@ const fetchStats = async (
       user.repositoryDiscussionComments.totalCount;
   }
   stats.contributedTo = user.repositoriesContributedTo.totalCount;
+
+  // Calculate streaks from contribution calendar
+  if (user.contributionsCollection?.contributionCalendar?.weeks) {
+    const streaks = calculateStreaks(user.contributionsCollection.contributionCalendar.weeks);
+    stats.currentStreak = streaks.currentStreak;
+    stats.longestStreak = streaks.longestStreak;
+  }
 
   // Retrieve stars while filtering out repositories to be hidden.
   const allExcludedRepos = [...exclude_repo, ...excludeRepositories];

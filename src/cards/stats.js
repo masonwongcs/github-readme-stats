@@ -267,6 +267,8 @@ const renderStatsCard = (stats, options = {}) => {
     totalDiscussionsStarted,
     totalDiscussionsAnswered,
     contributedTo,
+    currentStreak,
+    longestStreak,
     rank,
   } = stats;
   const {
@@ -408,6 +410,26 @@ const renderStatsCard = (stats, options = {}) => {
     value: contributedTo,
     id: "contribs",
   };
+
+  if (show.includes("current_streak")) {
+    STATS.current_streak = {
+      icon: icons.streak,
+      label: i18n.t("statcard.current-streak"),
+      value: currentStreak || 0,
+      id: "current_streak",
+      unitSymbol: " days",
+    };
+  }
+
+  if (show.includes("longest_streak")) {
+    STATS.longest_streak = {
+      icon: icons.streak,
+      label: i18n.t("statcard.longest-streak"),
+      value: longestStreak || 0,
+      id: "longest_streak",
+      unitSymbol: " days",
+    };
+  }
 
   // @ts-ignore
   const isLongLocale = locale ? LONG_LOCALES.includes(locale) : false;
